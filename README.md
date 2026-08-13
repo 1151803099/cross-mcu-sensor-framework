@@ -54,3 +54,4 @@ The demo uses `MockTemperatureDriver`; values are tenths of a degree Celsius and
 - The code avoids dynamic allocation in the periodic sampling path. Construction/setup may allocate; for constrained targets this can be replaced with static objects or a fixed allocator.
 - A production scheduler invokes `sample_and_publish(timestamp_ms)` from an RTOS task or periodic bare-metal timer flag, not from an interrupt service routine.
 - For concurrent RTOS use, subscription/filter changes should occur during initialization or be protected by the platform synchronization primitive.
+- `SensorService` stores non-owning observer pointers. The application owns observers, must keep them alive while subscribed, and must call `unsubscribe()` before destroying an observer. Duplicate subscriptions are ignored.

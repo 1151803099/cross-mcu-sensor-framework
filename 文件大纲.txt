@@ -1,0 +1,79 @@
+跨 MCU 温度 Sensor 框架 - 文件大纲
+====================================
+
+一、从哪里开始阅读
+------------------
+1. src/main.cpp
+   演示程序入口。按“创建驱动 -> 创建传感器 -> 设置滤波 -> 注册应用订阅者
+   -> 初始化 -> 周期采样 -> 运行时切换滤波器”的顺序阅读。
+
+2. include/application/sensor_service.hpp
+   核心调用链。sample_and_publish() 完成：
+   读取温度 -> 调用滤波器 -> 生成 SensorReading -> 通知所有订阅者。
+
+二、分层与文件职责
+------------------
+platform/temperature_driver.hpp
+   ITemperatureDriver：唯一的跨 MCU 硬件抽象边界。
+   移植新 MCU 时实现 initialize/read_raw/raw_to_celsius 即可。
+
+platform/mock_temperature_driver.hpp
+   MockTemperatureDriver：PC 演示驱动，不访问真实硬件。
+   真实项目替换为 GD32 ADC、STM32 I2C、ESP32 OneWire 等具体实现。
+
+sensor/temperature_sensor.hpp
+   ISensor：传感器统一接口。
+   TemperatureSensor：调用平台驱动，输出已换算的摄氏温度。
+
+sensor/filter.hpp
+   IFilter：滤波策略接口。
+   NoFilter：不滤波。
+   MovingAverageFilter：滑动平均，降低随机噪声。
+   MedianFilter：中值滤波，抑制单点尖峰。
+
+application/sensor_service.hpp
+   SensorReading：应用层统一数据格式。
+   IReadingObserver：订阅者接口。
+   SensorService：采样、滤波、发布的编排服务。
+
+application/observers.hpp
+   GuiObserver：GUI 显示消费者示例。
+   MqttObserver：生成 MQTT topic/payload 的适配示例，未实现真实网络传输。
+   BusinessObserver：高温阈值业务判断示例。
+
+三、关键设计模式
+----------------
+1. 依赖倒置 / 接口隔离
+   TemperatureSensor 依赖 ITemperatureDriver，不依赖 GD32、STM32 等具体 MCU。
+
+2. 策略模式
+   SensorService 依赖 IFilter；可在运行时由 MovingAverageFilter 换成 MedianFilter。
+
+3. 观察者模式 / 发布订阅
+   SensorService 发布 SensorReading；GUI、MQTT、业务计算各自订阅，彼此解耦。
+
+四、一次采样的运行流程
+----------------------
+main.cpp 的定时循环调用：
+    SensorService::sample_and_publish(timestamp_ms)
+        -> TemperatureSensor::read(raw_celsius)
+            -> ITemperatureDriver::read_raw(raw_value)
+            -> ITemperatureDriver::raw_to_celsius(raw_value)
+        -> IFilter::process(raw_celsius)
+        -> GuiObserver::on_reading(reading)
+        -> MqttObserver::on_reading(reading)
+        -> BusinessObserver::on_reading(reading)
+
+五、其他文件
+------------
+CMakeLists.txt
+   CMake 构建配置，生成 sensor_demo 和 sensor_framework_tests。
+
+tests/framework_tests.cpp
+   基础测试：均值滤波、中值滤波、温度换算、发布、滤波器运行时切换。
+
+README.md
+   对外展示的项目说明和编译方式。
+
+SUBMISSION.md
+   面试时可用于解释的设计决策、演示数据和测试范围。
