@@ -45,6 +45,20 @@ void test_filters() {
     median.process(20.0F);
     median.process(100.0F);
     expect(nearly_equal(median.process(21.0F), 21.0F), "median removes a single outlier");
+
+    LowPassFilter low_pass(0.5F);
+    expect(nearly_equal(low_pass.process(20.0F), 20.0F), "low-pass initializes from first sample");
+    expect(nearly_equal(low_pass.process(30.0F), 25.0F), "low-pass applies alpha");
+    low_pass.set_alpha(2.0F);
+    expect(nearly_equal(low_pass.alpha(), 1.0F), "low-pass clamps alpha");
+    expect(nearly_equal(low_pass.process(40.0F), 40.0F), "low-pass alpha one follows input");
+
+    KalmanFilter kalman(0.01F, 0.1F);
+    expect(nearly_equal(kalman.process(20.0F), 20.0F), "kalman initializes from first measurement");
+    const float estimate = kalman.process(30.0F);
+    expect(estimate > 20.0F && estimate < 30.0F, "kalman estimate stays between measurements");
+    kalman.set_noise_parameters(0.0F, -1.0F);
+    expect(kalman.covariance() >= 0.0F, "kalman keeps valid covariance after parameter clamp");
 }
 
 void test_service_publish_and_filter_switch() {

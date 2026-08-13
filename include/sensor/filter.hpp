@@ -94,4 +94,103 @@ private:
     std::deque<float> samples_; // 历史样本窗口。
 };
 
+/**
+ * @brief 一阶低通滤波器。
+ *
+ * 公式：y[n] = alpha * x[n] + (1 - alpha) * y[n-1]。
+ * alpha 越小越平滑但响应越慢，alpha 越大响应越快但抑噪能力越弱。
+ * 该实现只保存上一次输出，不需要历史数据容器。
+ */
+class LowPassFilter final : public IFilter {
+public:
+    /** @param alpha 平滑系数，自动限制在 [0, 1]。 */
+    explicit LowPassFilter(float alpha) : alpha_(clamp_alpha(alpha)) {}
+
+    /** @brief 输入一个新采样并计算低通输出。@param sample 当前未滤波采样值。 */
+    float process(float sample) override {
+        if (!initialized_) {
+            output_ = sample;
+            initialized_ = true;
+        } else {
+            output_ = alpha_ * sample + (1.0F - alpha_) * output_;
+        }
+        return output_;
+    }
+
+    /** @brief 清除历史输出，使下一次输入直接作为初始值。 */
+    void reset() override {
+        output_ = 0.0F;
+        initialized_ = false;
+    }
+
+    const char* name() const override { return "low_pass"; }
+
+    /** @brief 运行时修改平滑系数，修改后保留当前输出历史。 */
+    void set_alpha(float alpha) { alpha_ = clamp_alpha(alpha); }
+    float alpha() const { return alpha_; }
+
+private:
+    static float clamp_alpha(float alpha) { return std::clamp(alpha, 0.0F, 1.0F); }
+
+    float alpha_;
+    float output_ {0.0F};
+    bool initialized_ {false};
+};
+
+/**
+ * @brief 一维标量卡尔曼滤波器。
+ *
+ * 假设温度在相邻采样间没有控制输入，仅使用过程噪声 Q 和测量噪声 R
+ * 估计当前值。Q/R 的相对大小决定响应速度与平滑程度。
+ */
+class KalmanFilter final : public IFilter {
+public:
+    /** @param process_noise_q 过程噪声 Q。@param measurement_noise_r 测量噪声 R。 */
+    explicit KalmanFilter(float process_noise_q = 0.01F, float measurement_noise_r = 0.1F)
+        : process_noise_q_(positive_or_default(process_noise_q)),
+          measurement_noise_r_(positive_or_default(measurement_noise_r)) {}
+
+    /** @brief 执行一次预测和测量更新。@param measurement 当前传感器测量值。 */
+    float process(float measurement) override {
+        if (!initialized_) {
+            estimate_ = measurement;
+            initialized_ = true;
+            covariance_ = 1.0F;
+            return estimate_;
+        }
+
+        covariance_ += process_noise_q_;  // 预测：不确定性随过程噪声增加。
+        const float gain = covariance_ / (covariance_ + measurement_noise_r_);
+        estimate_ += gain * (measurement - estimate_);
+        covariance_ = (1.0F - gain) * covariance_;
+        return estimate_;
+    }
+
+    void reset() override {
+        estimate_ = 0.0F;
+        covariance_ = 1.0F;
+        initialized_ = false;
+    }
+
+    const char* name() const override { return "kalman"; }
+
+    /** @brief 修改 Q/R 参数；非正值自动替换为最小正值。 */
+    void set_noise_parameters(float process_noise_q, float measurement_noise_r) {
+        process_noise_q_ = positive_or_default(process_noise_q);
+        measurement_noise_r_ = positive_or_default(measurement_noise_r);
+    }
+
+    float estimate() const { return estimate_; }
+    float covariance() const { return covariance_; }
+
+private:
+    static float positive_or_default(float value) { return value > 0.0F ? value : 0.001F; }
+
+    float process_noise_q_;
+    float measurement_noise_r_;
+    float estimate_ {0.0F};
+    float covariance_ {1.0F};
+    bool initialized_ {false};
+};
+
 }  // namespace sensor_framework::sensor

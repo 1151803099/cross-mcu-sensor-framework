@@ -21,6 +21,18 @@ platform/mock_temperature_driver.hpp
    MockTemperatureDriver：PC 演示驱动，不访问真实硬件。
    真实项目替换为 GD32 ADC、STM32 I2C、ESP32 OneWire 等具体实现。
 
+embedded/stm32f1/stm32f1_onewire.hpp/.cpp
+   STM32F103C8T6 平台的 1-Wire 底层驱动，使用 STM32 HAL 与 DWT 微秒计时。
+   负责总线复位、存在脉冲检测、位读写和字节读写。
+
+embedded/stm32f1/stm32f1_ds18b20_driver.hpp/.cpp
+   DS18B20 的 ITemperatureDriver 具体实现。
+   负责读取 ROM、验证家族码和 CRC、启动温度转换、读取 scratchpad 和温度换算。
+   当前使用 SKIP_ROM，只支持一条总线上的一个外部供电 DS18B20。
+
+embedded/stm32f1/README.md
+   STM32F103C8T6 + DS18B20 的硬件接线、CubeMX/DWT 配置和集成方法。
+
 sensor/temperature_sensor.hpp
    ISensor：传感器统一接口。
    TemperatureSensor：调用平台驱动，输出已换算的摄氏温度。
@@ -30,6 +42,8 @@ sensor/filter.hpp
    NoFilter：不滤波。
    MovingAverageFilter：滑动平均，降低随机噪声。
    MedianFilter：中值滤波，抑制单点尖峰。
+   LowPassFilter：一阶低通，仅保存上一次输出，使用 alpha 控制平滑和响应速度。
+   KalmanFilter：一维标量卡尔曼，使用 Q/R 估计过程噪声和测量噪声。
 
 application/sensor_service.hpp
    SensorReading：应用层统一数据格式。
@@ -63,6 +77,14 @@ main.cpp 的定时循环调用：
         -> GuiObserver::on_reading(reading)
         -> MqttObserver::on_reading(reading)
         -> BusinessObserver::on_reading(reading)
+
+STM32F103C8T6 + DS18B20 对应的硬件调用链：
+    Stm32f1Ds18b20Driver::read_raw()
+        -> Stm32f1OneWire::reset_and_detect()
+        -> CONVERT_T (启动温度转换并等待)
+        -> READ_SCRATCHPAD (读取 9 字节并进行 CRC 校验)
+        -> TemperatureSensor::read()
+        -> SensorService::sample_and_publish()
 
 五、其他文件
 ------------

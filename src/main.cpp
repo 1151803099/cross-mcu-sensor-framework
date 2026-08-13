@@ -48,5 +48,14 @@ int main() {
         service.sample_and_publish(time_ms);
     }
 
+    // 8. 再演示一阶低通和卡尔曼滤波；两者都实现同一个 IFilter 接口。
+    std::cout << "\nSwitch filter at runtime: low-pass\n";
+    service.set_filter(std::make_unique<sensor::LowPassFilter>(0.5F));
+    service.sample_and_publish(9000U);
+
+    std::cout << "\nSwitch filter at runtime: kalman\n";
+    service.set_filter(std::make_unique<sensor::KalmanFilter>(0.01F, 0.1F));
+    service.sample_and_publish(10000U);
+
     return 0;
 }

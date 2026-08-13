@@ -49,9 +49,15 @@ The demo uses `MockTemperatureDriver`; values are tenths of a degree Celsius and
 - Add a filter: implement `IFilter`.
 - Add a consumer: implement `IReadingObserver`.
 
+The framework also includes `LowPassFilter` and `KalmanFilter`. Low-pass filtering uses one coefficient `alpha`; the scalar Kalman filter uses process-noise `Q` and measurement-noise `R`. These parameters should be tuned with real sensor data.
+
 ## Embedded Notes
 
 - The code avoids dynamic allocation in the periodic sampling path. Construction/setup may allocate; for constrained targets this can be replaced with static objects or a fixed allocator.
 - A production scheduler invokes `sample_and_publish(timestamp_ms)` from an RTOS task or periodic bare-metal timer flag, not from an interrupt service routine.
 - For concurrent RTOS use, subscription/filter changes should occur during initialization or be protected by the platform synchronization primitive.
 - `SensorService` stores non-owning observer pointers. The application owns observers, must keep them alive while subscribed, and must call `unsubscribe()` before destroying an observer. Duplicate subscriptions are ignored.
+
+## STM32F103C8T6 + DS18B20 Example
+
+The `embedded/stm32f1/` directory contains a concrete `Stm32f1Ds18b20Driver` implementation of `ITemperatureDriver`. Hardware setup and STM32CubeF1 integration notes are in [embedded/stm32f1/README.md](embedded/stm32f1/README.md).

@@ -154,5 +154,16 @@ ctest --test-dir build --output-on-failure
 
 - 新增 MCU：实现 `ITemperatureDriver`。
 - 新增传感器：实现 `ISensor`，并继续复用现有滤波器和订阅者机制。
-- 新增滤波算法：实现 `IFilter`，例如限幅滤波、一阶低通滤波、卡尔曼滤波。
+- 新增滤波算法：实现 `IFilter`，例如限幅滤波；当前已提供一阶低通滤波和一维卡尔曼滤波。
 - 新增应用消费者：实现 `IReadingObserver`，例如本地存储、故障诊断、风机闭环控制。
+
+### 当前滤波器参数
+
+- 一阶低通：`alpha` 在 0 到 1 之间；值越小越平滑，值越大响应越快。DS18B20 可从 `0.3~0.5` 附近开始调试。
+- 卡尔曼：`Q` 是过程噪声，`R` 是测量噪声；`Q/R` 越大通常响应越快，越小通常越平滑。参数应通过实际采样数据和阶跃响应验证，不能只凭经验值确定。
+
+## STM32F103C8T6 + DS18B20 示例
+
+项目已提供 `embedded/stm32f1/` 平台适配层，其中 `Stm32f1Ds18b20Driver` 实现了 `ITemperatureDriver`。因此接入 DS18B20 后，`TemperatureSensor`、滤波器和 GUI/MQTT/业务订阅者无需改变。
+
+该目录的详细硬件连接、CubeMX 配置、DWT 微秒延时初始化、单设备限制和集成示例见 [embedded/stm32f1/README.md](embedded/stm32f1/README.md)。
